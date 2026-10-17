@@ -23,10 +23,15 @@ jobs:
           flutter-version: '3.19.0'
           channel: 'stable'
 
-      - name: Setup Android Project Structure
+      - name: Create Flutter Base Project
         run: |
-          mkdir -p android/app
-          
+          flutter create --org com.restaurant --project-name pos_app temp_app
+          cp -r temp_app/android ./android
+          rm -rf temp_app
+
+      - name: Configure Firebase & Android
+        run: |
+          # settings.gradle আপডেট
           cat << 'EOF' > android/settings.gradle
           pluginManagement {
               def flutterSdkPath = {
@@ -52,23 +57,7 @@ jobs:
           include ":app"
           EOF
 
-          cat << 'EOF' > android/build.gradle
-          allprojects {
-              repositories {
-                  google()
-                  mavenCentral()
-              }
-          }
-          rootProject.buildDir = '../build'
-          subprojects {
-              project.buildDir = "${rootProject.buildDir}/${project.name}"
-              project.evaluationDependsOn(':app')
-          }
-          tasks.register("clean", Delete) {
-              delete rootProject.buildDir
-          }
-          EOF
-
+          # app/build.gradle আপডেট
           cat << 'EOF' > android/app/build.gradle
           plugins {
               id "com.android.application"
@@ -99,38 +88,7 @@ jobs:
           }
           EOF
 
-          cat << 'EOF' > android/app/src/main/AndroidManifest.xml
-          <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-              package="com.restaurant.pos_app">
-              <uses-permission android:name="android.permission.INTERNET"/>
-              <application
-                  android:label="Cafe 1999"
-                  android:name="${applicationName}"
-                  android:icon="@mipmap/ic_launcher">
-                  <activity
-                      android:name=".MainActivity"
-                      android:exported="true"
-                      android:launchMode="singleTop"
-                      android:theme="@style/LaunchTheme"
-                      android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"
-                      android:hardwareAccelerated="true"
-                      android:windowSoftInputMode="adjustResize">
-                      <meta-data
-                        android:name="io.flutter.embedding.android.NormalTheme"
-                        android:resource="@style/NormalTheme"
-                        />
-                      <intent-filter>
-                          <action android:name="android.intent.action.MAIN"/>
-                          <category android:name="android.intent.category.LAUNCHER"/>
-                      </intent-filter>
-                  </activity>
-                  <meta-data
-                      android:name="flutterEmbedding"
-                      android:value="2" />
-              </application>
-          </manifest>
-          EOF
-
+          # google-services.json কপি করা
           if [ -f "google-services.json" ]; then
             cp google-services.json android/app/
           fi
