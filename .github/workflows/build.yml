@@ -31,7 +31,7 @@ jobs:
 
       - name: Configure Gradle & Firebase
         run: |
-          # গ্র্যাডল র্যাপার ভার্সন ৮.৩ এ আপডেট
+          # গ্র্যাডল র্যাপার ভার্সন ৮.৩ সেট করা
           sed -i -E 's/gradle-[0-9.]+-all.zip/gradle-8.3-all.zip/g' android/gradle/wrapper/gradle-wrapper.properties
 
           # settings.gradle কনফিগারেশন
@@ -60,7 +60,7 @@ jobs:
           include ":app"
           EOF
 
-          # app/build.gradle কনফিগারেশন
+          # app/build.gradle কনফিগারেশন (Debug Signing যুক্ত রিলিজ)
           cat << 'EOF' > android/app/build.gradle
           plugins {
               id "com.android.application"
@@ -78,6 +78,13 @@ jobs:
                   versionCode 1
                   versionName "1.0.0"
               }
+              buildTypes {
+                  release {
+                      signingConfig signingConfigs.debug
+                      minifyEnabled false
+                      shrinkResources false
+                  }
+              }
               compileOptions {
                   sourceCompatibility JavaVersion.VERSION_17
                   targetCompatibility JavaVersion.VERSION_17
@@ -91,7 +98,7 @@ jobs:
           }
           EOF
 
-          # google-services.json কপি করা
+          # google-services.json ফাইল কপি করা
           if [ -f "google-services.json" ]; then
             cp google-services.json android/app/
           fi
@@ -99,7 +106,7 @@ jobs:
       - name: Get Dependencies
         run: flutter pub get
 
-      - name: Build APK
+      - name: Build APK (Signed)
         run: flutter build apk --release
 
       - name: Upload APK Artifact
