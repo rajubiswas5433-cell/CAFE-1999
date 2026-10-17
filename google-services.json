@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "945970504344",
+    "project_id": "cafe-57063",
+    "storage_bucket": "cafe-57063.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:945970504344:android:086f9e2f2eb47776f2e6ed",
+        "android_client_info": {
+          "package_name": "com.restaurant.pos_app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyC9fpJO5n55qw8TadxnOe9rtAwyNSqNPDk"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
