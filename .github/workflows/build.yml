@@ -29,9 +29,12 @@ jobs:
           cp -r temp_app/android ./android
           rm -rf temp_app
 
-      - name: Configure Firebase & Android
+      - name: Configure Gradle & Firebase
         run: |
-          # settings.gradle আপডেট
+          # গ্র্যাডল র্যাপার ভার্সন ৮.৩ এ আপডেট
+          sed -i -E 's/gradle-[0-9.]+-all.zip/gradle-8.3-all.zip/g' android/gradle/wrapper/gradle-wrapper.properties
+
+          # settings.gradle কনফিগারেশন
           cat << 'EOF' > android/settings.gradle
           pluginManagement {
               def flutterSdkPath = {
@@ -57,7 +60,7 @@ jobs:
           include ":app"
           EOF
 
-          # app/build.gradle আপডেট
+          # app/build.gradle কনফিগারেশন
           cat << 'EOF' > android/app/build.gradle
           plugins {
               id "com.android.application"
