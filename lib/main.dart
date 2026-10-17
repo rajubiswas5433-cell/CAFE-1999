@@ -3,6 +3,9 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:intl/intl.dart';
+import 'package:pdf/pdf.dart';
+import 'package:pdf/widgets.dart' as pw;
+import 'package:printing/printing.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -39,7 +42,7 @@ class RoleSelectScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Cafe 1999 Live System', style: TextStyle(fontWeight: FontWeight.bold)),
+        title: const Text('Cafe 1999 System', style: TextStyle(fontWeight: FontWeight.bold)),
         centerTitle: true,
       ),
       body: Center(
@@ -48,12 +51,9 @@ class RoleSelectScreen extends StatelessWidget {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const Icon(Icons.restaurant, size: 80, color: Colors.deepOrange),
+              const Icon(Icons.restaurant_menu, size: 80, color: Colors.deepOrange),
               const SizedBox(height: 24),
-              const Text(
-                'মোড নির্বাচন করুন',
-                style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
-              ),
+              const Text('মোড নির্বাচন করুন', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
               const SizedBox(height: 32),
               SizedBox(
                 width: double.infinity,
@@ -67,10 +67,7 @@ class RoleSelectScreen extends StatelessWidget {
                   icon: const Icon(Icons.admin_panel_settings),
                   label: const Text('এডমিন প্যানেল (মালিক / ক্যাশ)', style: TextStyle(fontSize: 18)),
                   onPressed: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(builder: (context) => const AdminHomeScreen()),
-                    );
+                    Navigator.push(context, MaterialPageRoute(builder: (context) => const AdminHomeScreen()));
                   },
                 ),
               ),
@@ -84,13 +81,10 @@ class RoleSelectScreen extends StatelessWidget {
                     side: const BorderSide(color: Colors.deepOrange, width: 2),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                   ),
-                  icon: const Icon(Icons.person_pin),
-                  label: const Text('ওয়েটার অর্ডার স্ক্রিন', style: TextStyle(fontSize: 18)),
+                  icon: const Icon(Icons.receipt_long),
+                  label: const Text('ওয়েটার স্ক্রিন (অর্ডার ও KOT)', style: TextStyle(fontSize: 18)),
                   onPressed: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(builder: (context) => const WaiterTableScreen()),
-                    );
+                    Navigator.push(context, MaterialPageRoute(builder: (context) => const WaiterTableScreen()));
                   },
                 ),
               ),
@@ -117,7 +111,7 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(_tabIndex == 0 ? 'লাইভ টেবিল ও অর্ডার' : 'মেনু ম্যানেজমেন্ট'),
+        title: Text(_tabIndex == 0 ? 'লাইভ টেবিল ও ক্যাশিয়ার' : 'মেনু পরিবর্তন'),
         backgroundColor: Colors.deepOrange.shade100,
       ),
       bottomNavigationBar: NavigationBar(
@@ -133,27 +127,67 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
   }
 }
 
-// এডমিন: লাইভ টেবিল ভিউ
+// এডমিন: লাইভ টেবিল ভিউ ও বিল প্রিন্ট
 class LiveTablesView extends StatelessWidget {
   const LiveTablesView({super.key});
+
+  Future<void> _printCustomerBill(String table, List<dynamic> items, int total) async {
+    final pdf = pw.Document();
+    final now = DateTime.now();
+    final formattedDate = DateFormat('dd-MM-yyyy hh:mm a').format(now);
+
+    pdf.addPage(
+      pw.Page(
+        pageFormat: PdfPageFormat.roll80,
+        build: (pw.Context context) {
+          return pw.Column(
+            crossAxisAlignment: pw.CrossAxisAlignment.center,
+            children: [
+              pw.Text('Cafe 1999', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 18)),
+              pw.Text('Customer Receipt', style: const pw.TextStyle(fontSize: 12)),
+              pw.Divider(),
+              pw.Align(alignment: pw.Alignment.centerLeft, child: pw.Text('Table: $table')),
+              pw.Align(alignment: pw.Alignment.centerLeft, child: pw.Text('Date: $formattedDate')),
+              pw.Divider(),
+              ...items.map((it) => pw.Row(
+                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                children: [
+                  pw.Text('${it['name']} x ${it['qty']}'),
+                  pw.Text('Rs ${(it['price'] ?? 0) * (it['qty'] ?? 1)}'),
+                ],
+              )),
+              pw.Divider(),
+              pw.Row(
+                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                children: [
+                  pw.Text('TOTAL:', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 14)),
+                  pw.Text('Rs $total', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 14)),
+                ],
+              ),
+              pw.SizedBox(height: 10),
+              pw.Text('Thank You! Visit Again.', style: const pw.TextStyle(fontSize: 10)),
+            ],
+          );
+        },
+      ),
+    );
+
+    await Printing.layoutPdf(
+      onLayout: (PdfPageFormat format) async => pdf.save(),
+      name: 'Bill_Table_$table',
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
     return StreamBuilder<QuerySnapshot>(
       stream: FirebaseFirestore.instance.collection('active_orders').snapshots(),
       builder: (context, snapshot) {
-        if (snapshot.hasError) {
-          return Center(child: Text('ত্রুটি: ${snapshot.error}'));
-        }
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator());
-        }
+        if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
+        final docs = snapshot.data!.docs;
 
-        final docs = snapshot.data?.docs ?? [];
         if (docs.isEmpty) {
-          return const Center(
-            child: Text('বর্তমানে কোনো রানিং অর্ডার নেই।', style: TextStyle(fontSize: 16, color: Colors.grey)),
-          );
+          return const Center(child: Text('বর্তমানে কোনো রানিং অর্ডার নেই।', style: TextStyle(color: Colors.grey)));
         }
 
         return ListView.builder(
@@ -164,33 +198,25 @@ class LiveTablesView extends StatelessWidget {
             final table = data['table'] ?? docs[index].id;
             final items = (data['items'] as List<dynamic>?) ?? [];
             final total = data['total'] ?? 0;
-            final time = (data['updated_at'] as Timestamp?)?.toDate();
-            final formattedTime = time != null ? DateFormat('hh:mm a').format(time) : '';
 
             return Card(
               margin: const EdgeInsets.symmetric(vertical: 8),
-              elevation: 3,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              elevation: 3,
               child: Padding(
                 padding: const EdgeInsets.all(16.0),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text('টেবিল নং: $table', style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.deepOrange)),
-                        Text(formattedTime, style: const TextStyle(color: Colors.grey)),
-                      ],
-                    ),
+                    Text('টেবিল নং: $table', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.deepOrange)),
                     const Divider(),
                     ...items.map((it) => Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 4),
+                      padding: const EdgeInsets.symmetric(vertical: 2),
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          Text('${it['name']}  x ${it['qty']}', style: const TextStyle(fontSize: 16)),
-                          Text('₹${(it['price'] ?? 0) * (it['qty'] ?? 1)}', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500)),
+                          Text('${it['name']} x ${it['qty']}'),
+                          Text('₹${(it['price'] ?? 0) * (it['qty'] ?? 1)}'),
                         ],
                       ),
                     )),
@@ -198,23 +224,25 @@ class LiveTablesView extends StatelessWidget {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Text('মোট বিল: ₹$total', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                        ElevatedButton.icon(
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.green,
-                            foregroundColor: Colors.white,
-                          ),
-                          icon: const Icon(Icons.check_circle_outline, size: 18),
-                          label: const Text('পেইড ও ক্লিয়ার'),
-                          onPressed: () async {
-                            await FirebaseFirestore.instance.collection('active_orders').doc(docs[index].id).delete();
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(content: Text('টেবিল $table বিল সম্পন্ন হয়েছে!')),
-                            );
-                          },
-                        )
+                        Text('মোট: ₹$total', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                        Row(
+                          children: [
+                            IconButton(
+                              icon: const Icon(Icons.print, color: Colors.blueGrey),
+                              tooltip: 'বিল প্রিন্ট করুন',
+                              onPressed: () => _printCustomerBill(table.toString(), items, total),
+                            ),
+                            ElevatedButton(
+                              style: ElevatedButton.styleFrom(backgroundColor: Colors.green, foregroundColor: Colors.white),
+                              child: const Text('পেইড'),
+                              onPressed: () async {
+                                await FirebaseFirestore.instance.collection('active_orders').doc(docs[index].id).delete();
+                              },
+                            ),
+                          ],
+                        ),
                       ],
-                    )
+                    ),
                   ],
                 ),
               ),
@@ -237,7 +265,7 @@ class MenuManagementView extends StatelessWidget {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text(doc == null ? 'নতুন খাবার যোগ করুন' : 'খাবার এডিট করুন'),
+        title: Text(doc == null ? 'নতুন খাবার যোগ করুন' : 'দাম বা নাম পরিবর্তন'),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -260,7 +288,7 @@ class MenuManagementView extends StatelessWidget {
                 Navigator.pop(ctx);
               }
             },
-            child: const Text('সেভ করুন'),
+            child: const Text('সেভ'),
           )
         ],
       ),
@@ -282,7 +310,7 @@ class MenuManagementView extends StatelessWidget {
           final items = snapshot.data!.docs;
 
           if (items.isEmpty) {
-            return const Center(child: Text('কোনো আইটেম নেই। নিচে + বাটনে চাপ দিয়ে যোগ করুন।'));
+            return const Center(child: Text('কোনো আইটেম নেই। নিচে + বাটনে চাপ দিন।'));
           }
 
           return ListView.separated(
@@ -292,7 +320,7 @@ class MenuManagementView extends StatelessWidget {
             itemBuilder: (context, index) {
               final doc = items[index];
               return ListTile(
-                title: Text(doc['name'], style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                title: Text(doc['name'], style: const TextStyle(fontWeight: FontWeight.bold)),
                 subtitle: Text('দাম: ₹${doc['price']}'),
                 trailing: Row(
                   mainAxisSize: MainAxisSize.min,
@@ -310,7 +338,7 @@ class MenuManagementView extends StatelessWidget {
   }
 }
 
-// ----------------- ওয়েটার স্ক্রিন -----------------
+// ----------------- ওয়েটার স্ক্রিন (অর্ডার, KOT ও হোয়াটসঅ্যাপ) -----------------
 class WaiterTableScreen extends StatefulWidget {
   const WaiterTableScreen({super.key});
 
@@ -323,7 +351,43 @@ class _WaiterTableScreenState extends State<WaiterTableScreen> {
   final Map<String, int> orderQuantities = {};
   final phoneCtrl = TextEditingController();
 
-  Future<void> _sendLiveOrder(List<DocumentSnapshot> menuDocs) async {
+  Future<void> _printKOT(String table, List<dynamic> items) async {
+    final pdf = pw.Document();
+    final timeStr = DateFormat('hh:mm a, dd-MM').format(DateTime.now());
+
+    pdf.addPage(
+      pw.Page(
+        pageFormat: PdfPageFormat.roll80,
+        build: (pw.Context context) {
+          return pw.Column(
+            crossAxisAlignment: pw.CrossAxisAlignment.start,
+            children: [
+              pw.Center(child: pw.Text('*** KITCHEN ORDER TICKET (KOT) ***', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 13))),
+              pw.Divider(),
+              pw.Text('TABLE: $table', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 16)),
+              pw.Text('Time: $timeStr'),
+              pw.Divider(),
+              ...items.map((it) => pw.Row(
+                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                children: [
+                  pw.Text('${it['name']}', style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold)),
+                  pw.Text('QTY: ${it['qty']}', style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold)),
+                ],
+              )),
+              pw.Divider(),
+            ],
+          );
+        },
+      ),
+    );
+
+    await Printing.layoutPdf(
+      onLayout: (PdfPageFormat format) async => pdf.save(),
+      name: 'KOT_Table_$table',
+    );
+  }
+
+  Future<void> _processOrder(List<DocumentSnapshot> menuDocs) async {
     final selectedItems = [];
     int total = 0;
 
@@ -341,11 +405,11 @@ class _WaiterTableScreenState extends State<WaiterTableScreen> {
     }
 
     if (selectedItems.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('কমপক্ষে একটি খাবার নির্বাচন করুন!')));
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('খাবার সিলেক্ট করুন!')));
       return;
     }
 
-    // ফায়ারবেসে লাইভ অর্ডার পাঠানো
+    // ১. ফায়ারবেসে অর্ডার পাঠানো (ক্যাশে লাইভ দেখা যাবে)
     await FirebaseFirestore.instance.collection('active_orders').doc('table_$selectedTable').set({
       'table': selectedTable,
       'items': selectedItems,
@@ -353,21 +417,17 @@ class _WaiterTableScreenState extends State<WaiterTableScreen> {
       'updated_at': FieldValue.serverTimestamp(),
     });
 
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('টেবিল $selectedTable-এর অর্ডার লাইভ পাঠানো হয়েছে!')));
+    // ২. কিচেন KOT প্রিন্ট পপ-আপ খোলা
+    await _printKOT(selectedTable, selectedItems);
 
-    // হোয়াটসঅ্যাপে রসিদ পাঠানো
+    // ৩. কাস্টমারের হোয়াটসঅ্যাপ নম্বর দেওয়া থাকলে সেখানে পাঠানো
     final phone = phoneCtrl.text.trim();
     if (phone.isNotEmpty) {
-      String billText = "🧾 *Cafe 1999 রসিদ*\n";
-      billText += "টেবিল: $selectedTable\n";
-      billText += "তারিখ: ${DateFormat('dd-MM-yyyy hh:mm a').format(DateTime.now())}\n";
-      billText += "-------------------------\n";
+      String billText = "🧾 *Cafe 1999*\nটেবিল: $selectedTable\n-------------------------\n";
       for (var item in selectedItems) {
         billText += "${item['name']} x ${item['qty']} = ₹${item['price'] * item['qty']}\n";
       }
-      billText += "-------------------------\n";
-      billText += "*মোট বিল: ₹$total*\n\n";
-      billText += "আমাদের কাফেতে আসার জন্য ধন্যবাদ!";
+      billText += "-------------------------\n*মোট: ₹$total*";
 
       final cleanPhone = phone.replaceAll(RegExp(r'\D'), '');
       final formattedPhone = cleanPhone.length == 10 ? '91$cleanPhone' : cleanPhone;
@@ -382,15 +442,16 @@ class _WaiterTableScreenState extends State<WaiterTableScreen> {
       orderQuantities.clear();
       phoneCtrl.clear();
     });
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('অর্ডার সম্পন্ন ও KOT তৈরি হয়েছে!')));
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('অর্ডার গ্রহণ (ওয়েটার)'),
-        backgroundColor: Colors.deepOrange.shade100,
-      ),
+      appBar: AppBar(title: const Text('ওয়েটার অর্ডার স্ক্রিন'), backgroundColor: Colors.deepOrange.shade100),
       body: StreamBuilder<QuerySnapshot>(
         stream: FirebaseFirestore.instance.collection('menu').snapshots(),
         builder: (context, snapshot) {
@@ -406,12 +467,12 @@ class _WaiterTableScreenState extends State<WaiterTableScreen> {
           return Column(
             children: [
               Container(
-                padding: const EdgeInsets.all(12),
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                 color: Colors.orange.shade50,
                 child: Row(
                   children: [
-                    const Text('টেবিল নির্বাচন: ', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                    const SizedBox(width: 12),
+                    const Text('টেবিল:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                    const SizedBox(width: 16),
                     DropdownButton<String>(
                       value: selectedTable,
                       items: List.generate(15, (index) => (index + 1).toString())
@@ -463,7 +524,7 @@ class _WaiterTableScreenState extends State<WaiterTableScreen> {
                       controller: phoneCtrl,
                       keyboardType: TextInputType.phone,
                       decoration: const InputDecoration(
-                        labelText: 'কাস্টমারের হোয়াটসঅ্যাপ নম্বর (ঐচ্ছিক)',
+                        labelText: 'কাস্টমার হোয়াটসঅ্যাপ নম্বর (না দিলে খালি রাখুন)',
                         prefixIcon: Icon(Icons.phone),
                         border: OutlineInputBorder(),
                         isDense: true,
@@ -478,11 +539,11 @@ class _WaiterTableScreenState extends State<WaiterTableScreen> {
                           style: ElevatedButton.styleFrom(
                             backgroundColor: Colors.deepOrange,
                             foregroundColor: Colors.white,
-                            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                           ),
-                          icon: const Icon(Icons.send),
-                          label: const Text('অর্ডার পাঠান', style: TextStyle(fontSize: 16)),
-                          onPressed: () => _sendLiveOrder(menuDocs),
+                          icon: const Icon(Icons.print),
+                          label: const Text('অর্ডার ও KOT প্রিন্ট'),
+                          onPressed: () => _processOrder(menuDocs),
                         ),
                       ],
                     ),
